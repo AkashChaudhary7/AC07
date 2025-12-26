@@ -1,0 +1,20 @@
+{
+  "name": "LifeOS Pro",
+  "short_name": "LifeOS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#4e54c8",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192.png?text=LifeOS",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512.png?text=LifeOS",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
