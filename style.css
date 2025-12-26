@@ -1,0 +1,133 @@
+/* VARIABLES & THEME */
+:root {
+    --bg-color: #f0f2f5;
+    --text-color: #333;
+    --card-bg: rgba(255, 255, 255, 0.7);
+    --nav-bg: rgba(255, 255, 255, 0.85);
+    --primary: #4e54c8;
+    --secondary: #8f94fb;
+    --success: #2ecc71;
+    --danger: #e74c3c;
+    --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    --border: 1px solid rgba(255, 255, 255, 0.18);
+    --radius: 16px;
+}
+
+[data-theme="dark"] {
+    --bg-color: #121212;
+    --text-color: #e0e0e0;
+    --card-bg: rgba(30, 30, 30, 0.7);
+    --nav-bg: rgba(20, 20, 20, 0.85);
+    --primary: #bb86fc;
+    --secondary: #3700b3;
+    --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+body { background: var(--bg-color); color: var(--text-color); transition: background 0.3s, color 0.3s; padding-bottom: 80px; /* Space for nav */ }
+
+/* LAYOUT UTILS */
+.app-container { max-width: 600px; margin: 0 auto; min-height: 100vh; position: relative; }
+.app-header { padding: 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; background: var(--bg-color); transition: background 0.3s; }
+.row { display: flex; gap: 10px; align-items: center; }
+.space-between { justify-content: space-between; }
+.col { display: flex; flex-direction: column; }
+.full-width { width: 100%; }
+.text-center { text-align: center; }
+
+/* GLASSMORPHISM CARDS */
+.card {
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: var(--radius);
+    border: var(--border);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    margin: 15px 20px;
+    transition: transform 0.2s;
+}
+.card h3 { margin-bottom: 15px; font-size: 1.1rem; opacity: 0.8; }
+
+/* TYPOGRAPHY */
+.highlight-text { font-size: 2.5rem; font-weight: 700; margin: 10px 0; }
+.label { font-size: 0.8rem; opacity: 0.7; }
+.value { font-weight: bold; font-size: 1.1rem; }
+.success { color: var(--success); }
+.danger { color: var(--danger); }
+.small-text { font-size: 0.85rem; opacity: 0.7; margin-top: 5px; }
+
+/* FORMS & BUTTONS */
+input, select, textarea {
+    width: 100%; padding: 12px; margin-bottom: 10px;
+    border-radius: 10px; border: 1px solid rgba(128,128,128, 0.2);
+    background: rgba(255,255,255, 0.1); color: var(--text-color);
+    font-size: 1rem;
+}
+input:focus, textarea:focus { outline: 2px solid var(--primary); }
+
+.btn-primary, .btn-secondary, .btn-danger {
+    padding: 12px 20px; border: none; border-radius: 10px;
+    font-weight: 600; cursor: pointer; transition: 0.2s;
+    color: #fff; width: 100%; margin-top: 5px;
+}
+.btn-primary { background: linear-gradient(135deg, var(--primary), var(--secondary)); }
+.btn-secondary { background: #6c757d; }
+.btn-danger { background: var(--danger); }
+.btn-icon-only { width: 50px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 1.2rem; cursor: pointer; }
+.icon-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
+.action-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.action-btn { background: rgba(255,255,255,0.1); border: var(--border); padding: 10px; border-radius: 10px; color: var(--text-color); cursor: pointer; }
+
+/* NAVIGATION */
+.bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 70px; display: flex; justify-content: space-around; align-items: center;
+    background: var(--nav-bg);
+    backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+    border-top: var(--border); z-index: 100;
+    max-width: 600px; margin: 0 auto; /* Keep centered on desktop */
+}
+.nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; color: var(--text-color); opacity: 0.5; transition: 0.2s; cursor: pointer; }
+.nav-item.active { opacity: 1; transform: translateY(-2px); }
+.nav-item .icon { font-size: 1.5rem; margin-bottom: 2px; }
+.nav-item .label { font-size: 0.7rem; }
+
+/* TABS */
+.tab-content { display: none; animation: fadeIn 0.3s ease; }
+.tab-content.active { display: block; }
+
+/* SPECIFIC FEATURES */
+/* Progress Bar */
+.progress-bar-container { width: 100%; height: 10px; background: rgba(0,0,0,0.1); border-radius: 5px; overflow: hidden; }
+.progress-bar { height: 100%; background: var(--success); width: 0%; transition: width 0.5s ease; }
+
+/* Lists */
+.list-group { list-style: none; margin-top: 10px; }
+.list-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+.list-item:last-child { border-bottom: none; }
+
+/* Notes */
+.note-card { cursor: pointer; position: relative; }
+.delete-note { position: absolute; top: 10px; right: 10px; color: var(--danger); cursor: pointer; }
+.invisible-input { border: none; background: transparent; font-size: 1.2rem; font-weight: bold; padding: 0; }
+.invisible-textarea { border: none; background: transparent; height: 300px; resize: none; padding: 10px 0; }
+
+/* Tasks */
+.task-item { display: flex; align-items: center; padding: 10px 0; }
+.task-item input[type="checkbox"] { width: 20px; height: 20px; margin: 0 10px 0 0; }
+.task-item.completed span { text-decoration: line-through; opacity: 0.6; }
+
+/* Settings Switch */
+.switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+.slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: var(--primary); }
+input:checked + .slider:before { transform: translateX(26px); }
+
+/* ANIMATIONS */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.footer-info { text-align: center; font-size: 0.8rem; opacity: 0.5; padding: 20px; }
