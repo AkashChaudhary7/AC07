@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LifeOS - Personal Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <header class="app-header">
+            <h1 id="page-title">Dashboard</h1>
+            <button id="theme-toggle" class="icon-btn">🌙</button>
+        </header>
+
+        <main id="main-content">
+            
+            <section id="dashboard" class="tab-content active">
+                <div class="card glass summary-card">
+                    <h3>Total Balance</h3>
+                    <h1 class="highlight-text" id="dash-balance">$0.00</h1>
+                    <div class="row">
+                        <div class="col">
+                            <span class="label">Income</span>
+                            <span class="value success" id="dash-income">$0.00</span>
+                        </div>
+                        <div class="col">
+                            <span class="label">Expense</span>
+                            <span class="value danger" id="dash-expense">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass">
+                    <h3>Today's Progress</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="dash-progress-bar"></div>
+                    </div>
+                    <p class="small-text"><span id="dash-progress-text">0%</span> Completed</p>
+                </div>
+
+                <div class="card glass">
+                    <h3>Quick Actions</h3>
+                    <div class="action-grid">
+                        <button class="action-btn" onclick="navTo('tracker')">💰 Add Expense</button>
+                        <button class="action-btn" onclick="navTo('notes')">📝 New Note</button>
+                        <button class="action-btn" onclick="navTo('tasks')">✅ Add Task</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tracker" class="tab-content">
+                <div class="card glass">
+                    <h3>Add Transaction</h3>
+                    <div class="form-group">
+                        <select id="trans-type">
+                            <option value="expense">Expense</option>
+                            <option value="income">Income</option>
+                        </select>
+                        <input type="number" id="trans-amount" placeholder="Amount">
+                        <input type="text" id="trans-desc" placeholder="Description / Source">
+                        <select id="trans-category">
+                            <option value="Food">Food</option>
+                            <option value="Travel">Travel</option>
+                            <option value="Bills">Bills</option>
+                            <option value="Shopping">Shopping</option>
+                            <option value="Salary">Salary</option>
+                            <option value="Invest">Investment</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <button class="btn-primary" onclick="addTransaction()">Add</button>
+                    </div>
+                </div>
+
+                <div class="card glass">
+                    <h3>Budget & Savings</h3>
+                    <div class="row space-between">
+                        <span>Monthly Budget:</span>
+                        <input type="number" id="monthly-budget" class="inline-input" placeholder="Set Budget" onchange="updateBudget()">
+                    </div>
+                    <p class="small-text" id="budget-status">Remaining: $0.00</p>
+                </div>
+
+                <div class="card glass">
+                    <h3>Portfolio (Stocks/MF)</h3>
+                    <div class="form-group">
+                        <input type="text" id="asset-name" placeholder="Asset Name">
+                        <div class="row">
+                            <input type="number" id="asset-invested" placeholder="Invested">
+                            <input type="number" id="asset-current" placeholder="Current Val">
+                        </div>
+                        <button class="btn-secondary" onclick="addAsset()">Add Asset</button>
+                    </div>
+                    <ul id="asset-list" class="list-group"></ul>
+                </div>
+
+                <div class="card glass">
+                    <h3>Recent Transactions</h3>
+                    <ul id="transaction-list" class="list-group"></ul>
+                </div>
+            </section>
+
+            <section id="notes" class="tab-content">
+                <div class="card glass" id="note-editor" style="display:none;">
+                    <div class="row space-between">
+                        <input type="text" id="note-title" placeholder="Note Title" class="invisible-input">
+                        <button class="icon-btn" onclick="closeNote()">✕</button>
+                    </div>
+                    <textarea id="note-body" placeholder="Write something..." class="invisible-textarea"></textarea>
+                    <button class="btn-primary full-width" onclick="saveNote()">Save Note</button>
+                </div>
+
+                <button class="btn-primary floating-action" onclick="openNote()">+ New Note</button>
+
+                <div id="notes-list-container">
+                    </div>
+            </section>
+
+            <section id="tasks" class="tab-content">
+                <div class="card glass text-center">
+                    <h3>Daily Streak</h3>
+                    <h1 class="highlight-text" id="streak-count">🔥 0 Days</h1>
+                </div>
+
+                <div class="card glass">
+                    <div class="row">
+                        <input type="text" id="new-task-input" placeholder="Add a new task...">
+                        <button class="btn-icon-only" onclick="addTask()">＋</button>
+                    </div>
+                </div>
+
+                <div class="card glass">
+                    <h3>Today's Tasks</h3>
+                    <ul id="task-list" class="task-list"></ul>
+                </div>
+                
+                <button class="btn-secondary full-width" onclick="resetTasks()">Reset Daily Tasks</button>
+            </section>
+
+            <section id="settings" class="tab-content">
+                <div class="card glass">
+                    <h3>App Settings</h3>
+                    <div class="setting-item">
+                        <span>Dark Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="setting-theme-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="card glass">
+                    <h3>Data Management</h3>
+                    <button class="btn-secondary full-width" onclick="exportData()">📥 Export Data (JSON)</button>
+                    <br><br>
+                    <button class="btn-danger full-width" onclick="resetAllData()">⚠️ Reset All Data</button>
+                </div>
+                
+                <div class="footer-info">
+                    <p>LifeOS v1.0 • Offline Capable</p>
+                </div>
+            </section>
+
+        </main>
+
+        <nav class="bottom-nav glass">
+            <button class="nav-item active" onclick="switchTab('dashboard')">
+                <span class="icon">🏠</span>
+                <span class="label">Home</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('tracker')">
+                <span class="icon">💰</span>
+                <span class="label">Money</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('notes')">
+                <span class="icon">📝</span>
+                <span class="label">Notes</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('tasks')">
+                <span class="icon">✅</span>
+                <span class="label">Tasks</span>
+            </button>
+            <button class="nav-item" onclick="switchTab('settings')">
+                <span class="icon">⚙️</span>
+                <span class="label">Settings</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
