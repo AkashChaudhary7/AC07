@@ -1,375 +1,425 @@
-// === STATE MANAGEMENT ===
-const APP_KEY = 'lifeos_data_v1';
+// === GLOBAL STATE ===
+const APP_KEY = 'lifeos_pro_v1';
 let state = {
-    transactions: [],
-    budget: 0,
-    assets: [],
+    user: { pin: null, theme: 'light', lastLogin: Date.now() },
+    finance: { transactions: [], budget: 2000, assets: [] },
+    productivity: { goals: [], focusTime: 0, timerActive: false, weeklyPlan: {} },
+    health: { water: 0, waterGoal: 8 },
     notes: [],
-    tasks: [],
-    settings: {
-        darkMode: false,
-        streak: 0,
-        lastLogin: null
-    }
+    secureNotes: ""
 };
 
+let db; // IndexedDB instance
+let timerInterval;
+let timeLeft = 1500; // 25 mins
+
 // === INITIALIZATION ===
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
-    checkStreak();
+document.addEventListener('DOMContentLoaded', async () => {
+    loadLocalData();
     applyTheme();
+    await initDB();
+    
+    document.getElementById('date-display').innerText = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    
+    checkLock(); // App Lock Logic
     renderAll();
-    
-    // Event Listener for Theme Toggle in Settings
-    document.getElementById('setting-theme-toggle').addEventListener('change', (e) => {
-        toggleTheme(e.target.checked);
-    });
-    
-    // Header toggle
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-        const isDark = !state.settings.darkMode;
-        document.getElementById('setting-theme-toggle').checked = isDark;
-        toggleTheme(isDark);
-    });
 });
 
-// === CORE FUNCTIONS ===
-function loadData() {
+// === DATA MANAGMENT ===
+function loadLocalData() {
     const saved = localStorage.getItem(APP_KEY);
-    if (saved) {
-        state = JSON.parse(saved);
-        // Ensure structure exists if updating from older version
-        if(!state.assets) state.assets = [];
+    if (saved) state = { ...state, ...JSON.parse(saved) };
+    
+    // Reset daily counters if new day
+    const lastDate = new Date(state.user.lastLogin).toDateString();
+    const today = new Date().toDateString();
+    if (lastDate !== today) {
+        state.health.water = 0;
+        state.productivity.focusTime = 0;
     }
+    state.user.lastLogin = Date.now();
+    saveData();
 }
 
 function saveData() {
     localStorage.setItem(APP_KEY, JSON.stringify(state));
-    renderAll();
 }
 
-function renderAll() {
-    renderDashboard();
-    renderTransactions();
-    renderAssets();
-    renderNotes();
-    renderTasks();
-    updateSettingsUI();
+// === APP LOCK ===
+function checkLock() {
+    if (state.user.pin) {
+        document.getElementById('app-lock-screen').classList.remove('hidden');
+    }
 }
 
-// === NAVIGATION ===
-function switchTab(tabId) {
-    // Hide all sections
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    // Show target
-    document.getElementById(tabId).classList.add('active');
-    
-    // Update Nav
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    // Simple logic to find nav button based on index or onclick
-    // Using a simpler approach: finding the button that calls this function with this ID
-    // But since we are inside the function, we manually update based on ID
-    const navMap = { 'dashboard': 0, 'tracker': 1, 'notes': 2, 'tasks': 3, 'settings': 4 };
-    document.querySelectorAll('.nav-item')[navMap[tabId]].classList.add('active');
-
-    // Update Header Title
-    const titles = { 'dashboard': 'Dashboard', 'tracker': 'Wealth', 'notes': 'Notes', 'tasks': 'Daily Tasks', 'settings': 'Settings' };
-    document.getElementById('page-title').innerText = titles[tabId];
+function unlockApp() {
+    const input = document.getElementById('unlock-pin').value;
+    if (input === state.user.pin) {
+        document.getElementById('app-lock-screen').classList.add('hidden');
+    } else {
+        document.getElementById('lock-msg').innerText = "Incorrect PIN";
+    }
 }
 
-function navTo(tabId) {
-    switchTab(tabId);
+function savePin() {
+    const pin = document.getElementById('set-pin').value;
+    if (pin.length === 4) {
+        state.user.pin = pin;
+        saveData();
+        alert('PIN Set Successfully');
+    }
 }
 
 // === THEME ===
-function applyTheme() {
-    const isDark = state.settings.darkMode;
-    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    document.getElementById('setting-theme-toggle').checked = isDark;
-    document.getElementById('theme-toggle').innerText = isDark ? '☀️' : '🌙';
-}
-
-function toggleTheme(isDark) {
-    state.settings.darkMode = isDark;
+function toggleTheme() {
+    state.user.theme = state.user.theme === 'light' ? 'dark' : 'light';
     saveData();
     applyTheme();
 }
 
-// === DASHBOARD & LOGIC ===
-function renderDashboard() {
-    // Calc Finances
-    const income = state.transactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-    const expense = state.transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-    const balance = income - expense;
+function applyTheme() {
+    document.body.setAttribute('data-theme', state.user.theme);
+}
 
-    document.getElementById('dash-balance').innerText = formatMoney(balance);
-    document.getElementById('dash-income').innerText = `+${formatMoney(income)}`;
-    document.getElementById('dash-expense').innerText = `-${formatMoney(expense)}`;
-
-    // Calc Tasks
-    const totalTasks = state.tasks.length;
-    const completedTasks = state.tasks.filter(t => t.done).length;
-    const percent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+// === NAVIGATION ===
+function navTo(viewId) {
+    document.querySelectorAll('.view').forEach(el => el.classList.remove('active-view'));
+    document.getElementById(viewId).classList.add('active-view');
     
-    document.getElementById('dash-progress-bar').style.width = `${percent}%`;
-    document.getElementById('dash-progress-text').innerText = `${percent}%`;
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    
+    const titles = {dashboard: 'Dashboard', finance: 'Money Manager', productivity: 'Focus & Plan', vault: 'Vault', settings: 'Settings'};
+    document.getElementById('page-title').innerText = titles[viewId];
 }
 
-function formatMoney(amount) {
-    return '$' + parseFloat(amount).toFixed(2);
+// === DASHBOARD & HEALTH SCORE ===
+function calcHealthScore() {
+    const income = calcTotal('income');
+    const expenses = calcTotal('expense');
+    const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
+    
+    // Simple algo: 50% based on savings rate, 50% based on remaining budget
+    let score = Math.round(savingsRate + (state.finance.budget > expenses ? 20 : 0));
+    if (score > 100) score = 100;
+    if (score < 0) score = 0;
+    return score;
 }
 
-// === EXPENSE TRACKER ===
+function renderDashboard() {
+    const income = calcTotal('income');
+    const expense = calcTotal('expense');
+    
+    document.getElementById('dash-balance').innerText = `$${income - expense}`;
+    document.getElementById('dash-health-score').innerText = `${calcHealthScore()}/100`;
+    document.getElementById('water-count').innerText = state.health.water;
+    document.getElementById('water-goal-disp').innerText = state.health.waterGoal;
+    document.getElementById('dash-focus-time').innerText = `${state.productivity.focusTime} mins`;
+}
+
+// === FINANCE MODULE ===
+function calcTotal(type) {
+    return state.finance.transactions
+        .filter(t => t.type === type)
+        .reduce((acc, t) => acc + parseFloat(t.amount), 0);
+}
+
 function addTransaction() {
     const type = document.getElementById('trans-type').value;
-    const amount = parseFloat(document.getElementById('trans-amount').value);
-    const desc = document.getElementById('trans-desc').value;
-    const cat = document.getElementById('trans-category').value;
-
-    if (!amount || !desc) return alert('Please fill details');
-
-    state.transactions.unshift({
-        id: Date.now(),
-        type, amount, desc, cat, date: new Date().toLocaleDateString()
-    });
+    const amount = document.getElementById('trans-amt').value;
+    const cat = document.getElementById('trans-cat').value;
     
-    // Clear inputs
-    document.getElementById('trans-amount').value = '';
-    document.getElementById('trans-desc').value = '';
-    
+    if(!amount) return;
+
+    state.finance.transactions.push({ id: Date.now(), type, amount, cat });
     saveData();
-}
-
-function renderTransactions() {
-    const list = document.getElementById('transaction-list');
-    list.innerHTML = '';
+    renderFinance();
+    renderDashboard();
     
-    state.transactions.slice(0, 10).forEach(t => {
-        const li = document.createElement('li');
-        li.className = 'list-item';
-        li.innerHTML = `
-            <div class="col">
-                <span style="font-weight:bold">${t.desc}</span>
-                <span class="label">${t.cat} • ${t.date}</span>
-            </div>
-            <span class="${t.type === 'income' ? 'success' : 'danger'}">
-                ${t.type === 'income' ? '+' : '-'}${formatMoney(t.amount)}
-            </span>
-        `;
-        list.appendChild(li);
+    document.getElementById('trans-amt').value = "";
+}
+
+function renderFinance() {
+    const inc = calcTotal('income');
+    const exp = calcTotal('expense');
+    
+    document.getElementById('fin-income').innerText = `+$${inc}`;
+    document.getElementById('fin-expense').innerText = `-$${exp}`;
+    
+    const pct = Math.min((exp / state.finance.budget) * 100, 100);
+    document.getElementById('budget-bar').style.width = `${pct}%`;
+    document.getElementById('budget-pct').innerText = `${Math.round(pct)}%`;
+    
+    // Assets
+    const list = document.getElementById('asset-list');
+    list.innerHTML = "";
+    state.finance.assets.forEach(a => {
+        const pnl = a.curr - a.buy;
+        list.innerHTML += `<li>
+            <span>${a.name}</span>
+            <span class="${pnl >= 0 ? 'success' : 'danger'}">${pnl >= 0 ? '+' : ''}${pnl}</span>
+        </li>`;
     });
-
-    // Budget Update
-    document.getElementById('monthly-budget').value = state.budget || '';
-    updateBudgetDisplay();
 }
 
-function updateBudget() {
-    state.budget = parseFloat(document.getElementById('monthly-budget').value) || 0;
-    saveData();
-    updateBudgetDisplay();
-}
-
-function updateBudgetDisplay() {
-    const expense = state.transactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-    const remaining = state.budget - expense;
-    document.getElementById('budget-status').innerText = `Remaining: ${formatMoney(remaining)}`;
-    document.getElementById('budget-status').style.color = remaining < 0 ? 'var(--danger)' : 'var(--text-color)';
-}
-
-// === ASSET TRACKER ===
 function addAsset() {
     const name = document.getElementById('asset-name').value;
-    const invested = parseFloat(document.getElementById('asset-invested').value);
-    const current = parseFloat(document.getElementById('asset-current').value);
-
-    if(!name || isNaN(invested) || isNaN(current)) return;
-
-    state.assets.push({ id: Date.now(), name, invested, current });
+    const buy = document.getElementById('asset-buy').value;
+    const curr = document.getElementById('asset-curr').value;
     
-    document.getElementById('asset-name').value = '';
-    document.getElementById('asset-invested').value = '';
-    document.getElementById('asset-current').value = '';
-    saveData();
+    if(name && buy) {
+        state.finance.assets.push({name, buy, curr});
+        saveData();
+        renderFinance();
+    }
 }
 
-function renderAssets() {
-    const list = document.getElementById('asset-list');
-    list.innerHTML = '';
-    state.assets.forEach((a, index) => {
-        const diff = a.current - a.invested;
-        const pnlClass = diff >= 0 ? 'success' : 'danger';
-        const percent = ((diff / a.invested) * 100).toFixed(1);
+// === PRODUCTIVITY ===
+// Timer
+function startTimer() {
+    if(state.productivity.timerActive) return;
+    state.productivity.timerActive = true;
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+        const s = (timeLeft % 60).toString().padStart(2, '0');
+        document.getElementById('timer-display').innerText = `${m}:${s}`;
         
-        const li = document.createElement('li');
-        li.className = 'list-item';
-        li.innerHTML = `
-            <div class="col">
-                <span style="font-weight:bold">${a.name}</span>
-                <span class="label">Inv: ${a.invested}</span>
+        if(timeLeft <= 0) {
+            pauseTimer();
+            state.productivity.focusTime += 25;
+            saveData();
+            renderDashboard();
+            alert("Focus Session Complete!");
+            resetTimer();
+        }
+    }, 1000);
+}
+
+function pauseTimer() {
+    clearInterval(timerInterval);
+    state.productivity.timerActive = false;
+}
+
+function resetTimer() {
+    pauseTimer();
+    timeLeft = 1500;
+    document.getElementById('timer-display').innerText = "25:00";
+}
+
+// Planner
+function renderPlanner() {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const container = document.getElementById('planner-container');
+    container.innerHTML = "";
+    
+    days.forEach(day => {
+        const task = state.productivity.weeklyPlan[day] || "";
+        container.innerHTML += `
+            <div class="flex-row-center mb-10">
+                <span style="width:40px; font-weight:bold">${day}</span>
+                <input type="text" value="${task}" onchange="updatePlan('${day}', this.value)" style="margin:0">
             </div>
-            <div class="col text-center">
-                <span style="font-weight:bold">${a.current}</span>
-                <span class="${pnlClass} label">${diff >=0 ? '+' : ''}${diff} (${percent}%)</span>
-            </div>
-            <button class="icon-btn" onclick="deleteAsset(${index})" style="font-size:1rem; opacity:0.5">🗑️</button>
         `;
-        list.appendChild(li);
     });
 }
 
-function deleteAsset(index) {
-    state.assets.splice(index, 1);
+function updatePlan(day, val) {
+    state.productivity.weeklyPlan[day] = val;
     saveData();
 }
 
-// === NOTES ===
-let currentNoteId = null;
+// Goals
+function addGoal() {
+    const txt = document.getElementById('goal-input').value;
+    if(txt) {
+        state.productivity.goals.push({text: txt, done: false});
+        saveData();
+        renderGoals();
+        document.getElementById('goal-input').value = "";
+    }
+}
+
+function renderGoals() {
+    const list = document.getElementById('goal-list');
+    list.innerHTML = "";
+    state.productivity.goals.forEach((g, i) => {
+        list.innerHTML += `<li>
+            <span style="text-decoration: ${g.done ? 'line-through' : 'none'}">${g.text}</span>
+            <input type="checkbox" ${g.done ? 'checked' : ''} onchange="toggleGoal(${i})">
+        </li>`;
+    });
+}
+
+function toggleGoal(idx) {
+    state.productivity.goals[idx].done = !state.productivity.goals[idx].done;
+    saveData();
+    renderGoals();
+}
+
+// Water
+function addWater() {
+    state.health.water++;
+    saveData();
+    renderDashboard();
+}
+
+// === VAULT (INDEXEDDB & NOTES) ===
+// Notes
+function newNote() {
+    document.getElementById('modal-note-title').value = "";
+    document.getElementById('modal-note-body').value = "";
+    document.getElementById('note-modal').classList.remove('hidden');
+}
+
+function saveModalNote() {
+    const title = document.getElementById('modal-note-title').value;
+    const body = document.getElementById('modal-note-body').value;
+    state.notes.push({title, body, date: new Date().toLocaleDateString()});
+    saveData();
+    closeModal();
+    renderNotes();
+}
+
+function closeModal() {
+    document.getElementById('note-modal').classList.add('hidden');
+}
 
 function renderNotes() {
-    const container = document.getElementById('notes-list-container');
-    container.innerHTML = '';
-    
-    state.notes.forEach(note => {
-        const div = document.createElement('div');
-        div.className = 'card glass note-card';
-        div.onclick = (e) => { if(!e.target.classList.contains('delete-note')) editNote(note.id); };
-        div.innerHTML = `
-            <h3>${note.title || 'Untitled'}</h3>
-            <p class="small-text">${note.body.substring(0, 50)}...</p>
-            <span class="delete-note" onclick="deleteNote(${note.id})">🗑️</span>
+    const div = document.getElementById('notes-list');
+    div.innerHTML = "";
+    state.notes.forEach((n, i) => {
+        div.innerHTML += `
+            <div class="card glass">
+                <h4>${n.title}</h4>
+                <small>${n.body.substring(0, 50)}...</small>
+                <button class="btn-danger btn-small mt-10" onclick="deleteNote(${i})">Del</button>
+            </div>
         `;
-        container.appendChild(div);
     });
 }
 
-function openNote() {
-    currentNoteId = null;
-    document.getElementById('note-title').value = '';
-    document.getElementById('note-body').value = '';
-    document.getElementById('note-editor').style.display = 'block';
-    document.getElementById('notes-list-container').style.display = 'none';
-}
-
-function editNote(id) {
-    currentNoteId = id;
-    const note = state.notes.find(n => n.id === id);
-    document.getElementById('note-title').value = note.title;
-    document.getElementById('note-body').value = note.body;
-    document.getElementById('note-editor').style.display = 'block';
-    document.getElementById('notes-list-container').style.display = 'none';
-}
-
-function closeNote() {
-    document.getElementById('note-editor').style.display = 'none';
-    document.getElementById('notes-list-container').style.display = 'block';
-}
-
-function saveNote() {
-    const title = document.getElementById('note-title').value;
-    const body = document.getElementById('note-body').value;
-    
-    if (currentNoteId) {
-        const note = state.notes.find(n => n.id === currentNoteId);
-        note.title = title;
-        note.body = body;
-        note.updated = Date.now();
-    } else {
-        state.notes.unshift({ id: Date.now(), title, body, updated: Date.now() });
-    }
+function deleteNote(i) {
+    state.notes.splice(i, 1);
     saveData();
-    closeNote();
+    renderNotes();
 }
 
-function deleteNote(id) {
-    if(confirm('Delete note?')) {
-        state.notes = state.notes.filter(n => n.id !== id);
-        saveData();
-    }
+// Secure Notes
+function switchVaultTab(tab) {
+    document.querySelectorAll('.vault-tab').forEach(e => e.classList.add('hidden'));
+    document.getElementById(`vault-${tab}`).classList.remove('hidden');
+    document.querySelectorAll('.tab-pill').forEach(e => e.classList.remove('active'));
+    event.currentTarget.classList.add('active');
 }
 
-// === TASKS & STREAK ===
-function checkStreak() {
-    const today = new Date().toDateString();
-    if (state.settings.lastLogin !== today) {
-        // New day logic
-        if (state.settings.lastLogin === new Date(Date.now() - 86400000).toDateString()) {
-            state.settings.streak++; // Consecutive day
-        } else if (state.settings.lastLogin !== today) {
-            // Missed a day (unless it's the very first run)
-            if(state.settings.lastLogin) state.settings.streak = 1; 
-            else state.settings.streak = 1;
-        }
-        state.settings.lastLogin = today;
+function accessSecureNotes() {
+    const pin = document.getElementById('secure-access-pin').value;
+    if(pin === state.user.pin) {
+        document.getElementById('secure-lock-ui').classList.add('hidden');
+        document.getElementById('secure-content').classList.remove('hidden');
+        document.getElementById('secure-notepad').value = state.secureNotes;
         
-        // Reset daily tasks
-        state.tasks.forEach(t => t.done = false);
-        saveData();
+        // Auto save on type
+        document.getElementById('secure-notepad').addEventListener('input', (e) => {
+            state.secureNotes = e.target.value;
+            saveData();
+        });
+    } else {
+        alert('Wrong PIN');
     }
-    document.getElementById('streak-count').innerText = `🔥 ${state.settings.streak} Days`;
 }
 
-function addTask() {
-    const input = document.getElementById('new-task-input');
-    const txt = input.value.trim();
-    if (!txt) return;
-    
-    state.tasks.push({ id: Date.now(), text: txt, done: false });
-    input.value = '';
-    saveData();
-}
-
-function renderTasks() {
-    const list = document.getElementById('task-list');
-    list.innerHTML = '';
-    
-    state.tasks.forEach((task, index) => {
-        const li = document.createElement('li');
-        li.className = `task-item ${task.done ? 'completed' : ''}`;
-        li.innerHTML = `
-            <input type="checkbox" onchange="toggleTask(${index})" ${task.done ? 'checked' : ''}>
-            <span>${task.text}</span>
-            <button onclick="deleteTask(${index})" style="margin-left:auto; background:none; border:none; cursor:pointer;">✕</button>
-        `;
-        list.appendChild(li);
+// IndexedDB for Files
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open('LifeOS_Files', 1);
+        req.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore('files', { keyPath: 'id', autoIncrement: true });
+        };
+        req.onsuccess = (e) => {
+            db = e.target.result;
+            resolve();
+            renderFiles();
+        };
     });
 }
 
-function toggleTask(index) {
-    state.tasks[index].done = !state.tasks[index].done;
-    saveData();
+function handleFileUpload(input) {
+    const file = input.files[0];
+    if(!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+        const tx = db.transaction(['files'], 'readwrite');
+        tx.objectStore('files').add({ name: file.name, type: file.type, data: reader.result });
+        tx.oncomplete = () => {
+            renderFiles();
+            alert('File saved to Secure Vault');
+        };
+    };
+    reader.readAsDataURL(file);
 }
 
-function deleteTask(index) {
-    state.tasks.splice(index, 1);
-    saveData();
+function renderFiles() {
+    if(!db) return;
+    const list = document.getElementById('file-list');
+    list.innerHTML = "";
+    
+    const tx = db.transaction(['files'], 'readonly');
+    const store = tx.objectStore('files');
+    
+    store.openCursor().onsuccess = (e) => {
+        const cursor = e.target.result;
+        if(cursor) {
+            list.innerHTML += `<li>
+                <span>${cursor.value.name}</span>
+                <button class="btn-small" onclick="deleteFile(${cursor.key})">Delete</button>
+            </li>`;
+            cursor.continue();
+        }
+    };
 }
 
-function resetTasks() {
-    if(confirm('Reset all daily tasks?')) {
-        state.tasks.forEach(t => t.done = false);
-        saveData();
-    }
+function deleteFile(key) {
+    const tx = db.transaction(['files'], 'readwrite');
+    tx.objectStore('files').delete(key);
+    tx.oncomplete = renderFiles;
 }
 
 // === SETTINGS ===
-function updateSettingsUI() {
-    // handled in init
-}
-
 function exportData() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "lifeos_backup.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    const dlNode = document.createElement('a');
+    dlNode.setAttribute("href", dataStr);
+    dlNode.setAttribute("download", "lifeos_backup.json");
+    document.body.appendChild(dlNode);
+    dlNode.click();
+    dlNode.remove();
 }
 
-function resetAllData() {
-    if(confirm('WARNING: This will delete ALL your data permanently. Continue?')) {
+function importData(input) {
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        state = JSON.parse(e.target.result);
+        saveData();
+        location.reload();
+    };
+    reader.readAsText(file);
+}
+
+function resetApp() {
+    if(confirm('Delete all data?')) {
         localStorage.removeItem(APP_KEY);
         location.reload();
     }
+}
+
+function renderAll() {
+    renderDashboard();
+    renderFinance();
+    renderPlanner();
+    renderGoals();
+    renderNotes();
 }
