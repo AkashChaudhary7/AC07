@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#4e54c8">
-    <meta name="description" content="LifeOS Adaptive - Personal Manager">
-    <title>LifeOS Adaptive</title>
+    <meta name="theme-color" content="#6c5ce7">
+    <meta name="description" content="LifeOS - All-in-one Personal Manager">
+    <title>LifeOS Ultimate</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -13,22 +13,30 @@
 <body>
 
     <div id="lock-screen" class="overlay hidden">
-        <div class="glass-card centered">
-            <h2>🔒 Locked</h2>
-            <input type="password" id="unlock-pin" maxlength="4" placeholder="Enter PIN" inputmode="numeric">
+        <div class="glass-card centered-card">
+            <h2>🔒 LifeOS Locked</h2>
+            <p>Enter your PIN to access</p>
+            <input type="password" id="unlock-pin" maxlength="4" placeholder="••••" inputmode="numeric">
             <button class="btn-primary" onclick="app.security.unlock()">Unlock</button>
+            <p id="lock-msg" class="text-danger"></p>
+        </div>
+    </div>
+
+    <div id="search-overlay" class="overlay hidden" onclick="if(event.target === this) app.ui.toggleSearch()">
+        <div class="glass-card search-card">
+            <input type="text" id="global-search" placeholder="Search notes, expenses, goals... (Esc)" oninput="app.search.run(this.value)">
+            <ul id="search-results" class="list-group"></ul>
         </div>
     </div>
 
     <div class="app-container">
         
         <header class="top-bar glass">
-            <div class="header-left">
+            <div class="flex-row">
                 <h2 id="page-title">Dashboard</h2>
-                <span id="mode-badge" class="badge">🚀 Work Mode</span>
             </div>
-            <div class="header-actions">
-                <button class="icon-btn" id="lock-layout-btn" onclick="app.adaptive.toggleLayoutLock()">🔓</button>
+            <div class="actions">
+                <button class="icon-btn" onclick="app.ui.toggleSearch()">🔍</button>
                 <button class="icon-btn" onclick="app.ui.toggleTheme()">🌓</button>
             </div>
         </header>
@@ -36,128 +44,213 @@
         <main id="main-content">
 
             <section id="view-dashboard" class="view active">
-                <div class="welcome-banner">
-                    <h1 id="greeting">Hello User</h1>
-                    <p id="context-msg" class="text-muted">Analyzing your patterns...</p>
+                <div class="welcome-header">
+                    <h1 id="greet-user">Hello! Akash Chaudhary👋</h1>
+                    <p id="date-display">...</p>
                 </div>
-                <div id="dashboard-grid" class="dashboard-grid"></div>
+
+                <div class="grid-2">
+                    <div class="card glass">
+                        <span class="label">Fin. Health</span>
+                        <h2 id="score-finance" class="text-gradient">0/100</h2>
+                    </div>
+                    <div class="card glass">
+                        <span class="label">Productivity</span>
+                        <h2 id="score-prod" class="text-gradient">0%</h2>
+                    </div>
+                </div>
+
+                <div class="card glass highlight-card">
+                    <div class="flex-between">
+                        <div>
+                            <span class="label">Balance</span>
+                            <h3 id="dash-balance">0.00</h3>
+                        </div>
+                        <div class="text-right">
+                            <span class="label">Focus</span>
+                            <h3 id="dash-focus">0m</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card glass water-widget">
+                    <div class="flex-row">
+                        <div class="water-icon">🚰</div>
+                        <div>
+                            <h4>Hydration</h4>
+                            <div class="progress-bar-bg"><div id="water-bar" class="progress-bar-fill"></div></div>
+                            <small><span id="water-count">0</span> / <span id="water-goal-disp">8</span> glasses</small>
+                        </div>
+                        <button class="btn-circle" onclick="app.health.addWater()">+</button>
+                    </div>
+                </div>
+
+                <div class="card glass">
+                    <h4>🎯 Top Goal</h4>
+                    <div id="dash-goal-preview"><p class="text-muted">No active goals</p></div>
+                </div>
             </section>
 
             <section id="view-finance" class="view">
                 <div class="card glass">
                     <div class="flex-between">
                         <span class="label">Monthly Budget</span>
-                        <span id="budget-alert" class="badge hidden">⚠️ Overspent</span>
+                        <span id="budget-alert" class="badge hidden">⚠️ 80% Used</span>
                     </div>
-                    <h2 id="fin-balance">$0.00</h2>
-                    <div class="progress-bg"><div id="fin-progress" class="progress-fill"></div></div>
-                    <small>Spent: <span id="fin-spent">$0.00</span></small>
+                    <h2 id="fin-budget-remain">0.00</h2>
+                    <div class="progress-bar-bg"><div id="fin-budget-bar" class="progress-bar-fill"></div></div>
+                    <small>Total Spent: <span id="fin-total-expense">0.00</span></small>
                 </div>
-                
-                <div class="card glass">
-                    <h3>Quick Add</h3>
-                    <div class="grid-2">
-                        <input type="number" id="fin-amt" placeholder="Amount">
-                        <select id="fin-cat">
-                            <option value="Food">Food 🍔</option>
-                            <option value="Travel">Travel 🚕</option>
-                            <option value="Bills">Bills 💡</option>
-                            <option value="Shopping">Shopping 🛍️</option>
-                        </select>
-                        <button class="btn-primary full-span" onclick="app.finance.add()">Add Expense</button>
-                    </div>
+
+                <div class="grid-2">
+                    <button class="btn-glass" onclick="app.finance.openModal('income')">⬇️ Income</button>
+                    <button class="btn-glass" onclick="app.finance.openModal('expense')">⬆️ Expense</button>
                 </div>
 
                 <div class="card glass">
-                    <h3>Recent</h3>
-                    <ul id="fin-list" class="list-group"></ul>
+                    <h3>Recent Transactions</h3>
+                    <ul id="trans-list" class="list-group"></ul>
+                </div>
+
+                <div class="card glass">
+                    <h3>📈 Investments</h3>
+                    <div class="flex-row gap-10">
+                        <input id="inv-name" placeholder="Asset" class="input-sm">
+                        <input id="inv-amt" type="number" placeholder=" Invested" class="input-sm">
+                        <input id="inv-curr" type="number" placeholder=" Current" class="input-sm">
+                        <button class="btn-sm btn-primary" onclick="app.finance.addAsset()">Add</button>
+                    </div>
+                    <ul id="asset-list" class="list-group mt-10"></ul>
                 </div>
             </section>
 
-            <section id="view-tasks" class="view">
-                <div class="card glass">
-                    <h3>✅ Task Master</h3>
-                    <div class="flex-row">
-                        <input type="text" id="task-input" placeholder="New Task...">
-                        <button class="btn-icon" onclick="app.tasks.add()">➕</button>
-                    </div>
-                </div>
-                <div class="card glass">
-                    <h3>Active Goals</h3>
-                    <ul id="goal-list" class="list-group"></ul>
-                    <button class="btn-ghost" onclick="app.tasks.addGoal()">+ Add Goal</button>
-                </div>
-                <ul id="task-list" class="list-group"></ul>
-            </section>
-
-            <section id="view-focus" class="view">
+            <section id="view-productivity" class="view">
                 <div class="card glass text-center timer-card">
                     <span class="label">Pomodoro</span>
                     <h1 id="timer-display">25:00</h1>
-                    <div class="flex-center gap-10">
+                    <div class="btn-group">
                         <button class="btn-primary" onclick="app.timer.toggle()">Start/Pause</button>
-                        <button class="btn-secondary" onclick="app.timer.reset()">Reset</button>
+                        <button class="btn-ghost" onclick="app.timer.reset()">Reset</button>
                     </div>
                 </div>
-                <div class="card glass water-widget flex-row">
-                    <div class="icon-box">🚰</div>
-                    <div class="flex-col">
-                        <h4>Hydration</h4>
-                        <small><span id="water-count">0</span> / 8 glasses</small>
+
+                <div class="card glass">
+                    <h3>🗓️ Weekly Planner</h3>
+                    <div id="planner-days" class="horizontal-scroll">
+                        </div>
+                    <div id="day-tasks" class="mt-10"></div>
+                </div>
+
+                <div class="card glass">
+                    <div class="flex-between">
+                        <h3>Goals</h3>
+                        <button class="btn-sm" onclick="app.goals.addPrompt()">+ New</button>
                     </div>
-                    <button class="btn-circle" onclick="app.health.addWater()">+</button>
+                    <ul id="goals-list" class="list-group"></ul>
                 </div>
             </section>
 
             <section id="view-vault" class="view">
-                <div class="card glass dashed-border upload-zone" onclick="document.getElementById('file-upload').click()">
-                    <p>📁 Tap to Upload Document</p>
-                    <input type="file" id="file-upload" hidden onchange="app.vault.upload(this)">
+                <div class="tabs glass">
+                    <button class="tab active" onclick="app.vault.switchTab('notes')">📝 Notes</button>
+                    <button class="tab" onclick="app.vault.switchTab('docs')">📁 Docs</button>
+                    <button class="tab" onclick="app.vault.switchTab('pass')">🔐 Secure</button>
                 </div>
-                <ul id="file-list" class="list-group mt-10"></ul>
+
+                <div id="tab-notes" class="vault-tab active">
+                    <div class="flex-between mb-10">
+                        <input type="text" id="note-search" placeholder="Filter notes..." oninput="app.notes.render()">
+                        <button class="btn-primary" onclick="app.notes.create()">+ Note</button>
+                    </div>
+                    <div id="notes-grid" class="notes-grid"></div>
+                </div>
+
+                <div id="tab-docs" class="vault-tab hidden">
+                    <div class="upload-zone" onclick="document.getElementById('doc-upload').click()">
+                        <p>Tap to upload PDF or Image</p>
+                        <input type="file" id="doc-upload" hidden onchange="app.docs.handleUpload(this)">
+                    </div>
+                    <ul id="docs-list" class="list-group mt-10"></ul>
+                    <small id="storage-usage" class="text-muted">Storage: 0MB</small>
+                </div>
+
+                <div id="tab-pass" class="vault-tab hidden">
+                    <div id="secure-lock" class="text-center p-20">
+                        <p>Enter App PIN to view secure notes</p>
+                        <input type="password" id="secure-pin-input" placeholder="PIN" maxlength="4">
+                        <button class="btn-primary mt-10" onclick="app.vault.unlockSecure()">Unlock</button>
+                    </div>
+                    <div id="secure-content" class="hidden">
+                        <textarea id="secure-pad" placeholder="Type secret info here... (Auto-saved)" oninput="app.vault.saveSecure(this.value)"></textarea>
+                    </div>
+                </div>
             </section>
 
             <section id="view-settings" class="view">
                 <div class="card glass">
-                    <h3>🧠 Adaptive Intelligence</h3>
+                    <h3>⚙️ Customization</h3>
                     <div class="setting-row">
-                        <span>Adaptive Sorting</span>
-                        <label class="switch"><input type="checkbox" id="set-adaptive" checked onchange="app.adaptive.toggleConfig(this.checked)"><span class="slider"></span></label>
+                        <span>Dark Mode</span>
+                        <label class="switch"><input type="checkbox" id="toggle-dark" onchange="app.ui.toggleTheme()"><span class="slider"></span></label>
                     </div>
-                    <button class="btn-secondary full-width mt-10" onclick="app.adaptive.reset()">🔄 Reset Learning Data</button>
-                </div>
-                
-                <div class="card glass">
-                    <h3>🔒 Security</h3>
                     <div class="setting-row">
-                        <input type="password" id="set-pin" placeholder="Set New PIN" maxlength="4" class="input-sm">
-                        <button class="btn-sm" onclick="app.security.setPin()">Save</button>
+                        <span>App PIN Lock</span>
+                        <input type="password" id="set-pin" placeholder="Set 4 digits" maxlength="4" class="input-sm" style="width: 80px;" onchange="app.security.setPin(this.value)">
+                    </div>
+                    <div class="setting-row">
+                        <span>Monthly Budget</span>
+                        <input type="number" id="set-budget" class="input-sm" onchange="app.finance.setBudget(this.value)">
                     </div>
                 </div>
 
                 <div class="card glass">
-                    <h3>💾 Data</h3>
-                    <button class="btn-danger full-width" onclick="app.data.reset()">Factory Reset</button>
+                    <h3>💾 Data & Backup</h3>
+                    <button class="btn-secondary full-width mb-10" onclick="app.data.export()">📤 Export JSON</button>
+                    <button class="btn-secondary full-width mb-10" onclick="document.getElementById('import-file').click()">📥 Import JSON</button>
+                    <input type="file" id="import-file" hidden onchange="app.data.import(this)">
+                    <button class="btn-danger full-width" onclick="app.data.reset()">⚠️ Factory Reset</button>
                 </div>
             </section>
 
         </main>
 
-        <button class="fab" onclick="app.ui.toggleQuickMenu()">+</button>
-        <div id="quick-menu" class="quick-menu hidden">
-            <button onclick="app.router.go('view-finance')">💸 Expense</button>
-            <button onclick="app.router.go('view-tasks')">✅ Task</button>
-            <button onclick="app.router.go('view-focus')">⏱️ Timer</button>
+        <div class="fab-container">
+            <button class="fab-main" onclick="app.ui.toggleFab()">+</button>
+            <div class="fab-options hidden" id="fab-menu">
+                <button onclick="app.finance.openModal('expense')">💸 Expense</button>
+                <button onclick="app.notes.create()">📝 Note</button>
+                <button onclick="app.goals.addPrompt()">🎯 Goal</button>
+                <button onclick="app.timer.toggle()">⏱️ Focus</button>
+            </div>
         </div>
 
         <nav class="bottom-nav glass">
-            <button class="nav-item active" onclick="app.router.go('view-dashboard')">🏠</button>
-            <button class="nav-item" onclick="app.router.go('view-finance')">💰</button>
-            <button class="nav-item" onclick="app.router.go('view-tasks')">✅</button>
-            <button class="nav-item" onclick="app.router.go('view-focus')">🚀</button>
-            <button class="nav-item" onclick="app.router.go('view-settings')">⚙️</button>
+            <button class="nav-item active" onclick="app.router.go('view-dashboard')">🏠<span>Home</span></button>
+            <button class="nav-item" onclick="app.router.go('view-finance')">💰<span>Money</span></button>
+            <button class="nav-item" onclick="app.router.go('view-productivity')">🚀<span>Focus</span></button>
+            <button class="nav-item" onclick="app.router.go('view-vault')">📁<span>Vault</span></button>
+            <button class="nav-item" onclick="app.router.go('view-settings')">⚙️<span>Set</span></button>
         </nav>
 
+    </div>
+
+    <div id="transaction-modal" class="modal hidden">
+        <div class="modal-content glass">
+            <h3 id="trans-modal-title">Add Transaction</h3>
+            <input type="number" id="t-amount" placeholder="Amount">
+            <input type="text" id="t-desc" placeholder="Description">
+            <select id="t-cat">
+                <option value="Food">Food 🍔</option>
+                <option value="Travel">Travel 🚕</option>
+                <option value="Bills">Bills 💡</option>
+                <option value="Shopping">Shopping 🛍️</option>
+                <option value="Other">Other 📦</option>
+            </select>
+            <div class="flex-end mt-10">
+                <button class="btn-ghost" onclick="app.ui.closeModal('transaction-modal')">Cancel</button>
+                <button class="btn-primary" onclick="app.finance.saveTransaction()">Save</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
