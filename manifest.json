@@ -1,18 +1,19 @@
 {
-  "name": "LifeOS Pro",
+  "name": "LifeOS Ultimate",
   "short_name": "LifeOS",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f5f7fa",
-  "theme_color": "#4e54c8",
+  "theme_color": "#6c5ce7",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "https://via.placeholder.com/192.png?text=LifeOS",
+      "src": "https://via.placeholder.com/192/6c5ce7/ffffff?text=OS",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://via.placeholder.com/512.png?text=LifeOS",
+      "src": "https://via.placeholder.com/512/6c5ce7/ffffff?text=LifeOS",
       "sizes": "512x512",
       "type": "image/png"
     }
