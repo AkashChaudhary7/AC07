@@ -1,42 +1,46 @@
-/* --- STATE MANAGEMENT --- */
-const APP_KEY = 'lifeos_ult_v1';
-const DB_NAME = 'LifeOS_Vault';
+/* --- STATE & CONFIG --- */
+const APP_KEY = 'lifeos_adaptive_v1';
+const DB_NAME = 'lifeos_vault';
 const DB_VER = 1;
 
-const defaultState = {
-    user: { name: 'User', pin: null, theme: 'light', lastLogin: Date.now() },
-    finance: { transactions: [], budget: 2000, assets: [] },
-    productivity: { goals: [], focusTime: 0, weekly: {} },
-    health: { water: 0, waterGoal: 8 },
-    notes: [],
-    secureNote: '',
+// Initial State
+let state = {
+    user: { name: 'User', theme: 'light', pin: null, layoutLocked: false, adaptiveEnabled: true },
+    finance: { balance: 0, budget: 2000, transactions: [] },
+    tasks: { items: [], goals: [] },
+    health: { water: 0, focusTime: 0 },
+    // Adaptive Tracking Data
+    stats: {
+        finance: 0, // Click count
+        tasks: 0,
+        focus: 0,
+        vault: 0,
+        lastActive: Date.now()
+    }
 };
 
-let state = JSON.parse(localStorage.getItem(APP_KEY)) || defaultState;
 let db = null;
 let timerInterval = null;
-let timerSeconds = 1500; // 25 min
+let timerSeconds = 1500;
 
-/* --- CORE APP OBJECT --- */
+/* --- CORE APP --- */
 const app = {
     init: async () => {
         app.data.load();
         app.ui.applyTheme();
-        app.security.checkLock();
-        await app.docs.initDB();
+        app.security.check();
+        await app.vault.initDB();
         
-        // Reset daily counters
-        const lastDate = new Date(state.user.lastLogin).toDateString();
-        const today = new Date().toDateString();
-        if(lastDate !== today) {
+        // Check for new day to reset daily counters
+        const lastDate = new Date(state.stats.lastActive).toDateString();
+        if(lastDate !== new Date().toDateString()) {
             state.health.water = 0;
-            state.productivity.focusTime = 0;
+            state.health.focusTime = 0;
         }
-        state.user.lastLogin = Date.now();
-        app.data.save();
+        state.stats.lastActive = Date.now();
         
         app.renderAll();
-        app.ui.initListeners();
+        app.adaptive.run(); // Run adaptive logic
     },
 
     /* --- DATA MODULE --- */
@@ -44,55 +48,130 @@ const app = {
         save: () => localStorage.setItem(APP_KEY, JSON.stringify(state)),
         load: () => {
             const saved = localStorage.getItem(APP_KEY);
-            if(saved) state = { ...defaultState, ...JSON.parse(saved) }; // Merge to ensure structure
-        },
-        export: () => {
-            const str = JSON.stringify(state);
-            const blob = new Blob([str], {type: "application/json"});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = `lifeos_backup_${Date.now()}.json`;
-            a.click();
-        },
-        import: (input) => {
-            const file = input.files[0];
-            if(!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    state = JSON.parse(e.target.result);
-                    app.data.save();
-                    location.reload();
-                } catch(err) { alert('Invalid File'); }
-            };
-            reader.readAsText(file);
+            if(saved) state = {...state, ...JSON.parse(saved)}; // Merge
         },
         reset: () => {
-            if(confirm('Wipe all data? This cannot be undone.')) {
+            if(confirm('Wipe all data?')) {
                 localStorage.removeItem(APP_KEY);
-                indexedDB.deleteDatabase(DB_NAME);
                 location.reload();
             }
         }
     },
 
-    /* --- UI & ROUTER --- */
+    /* --- ADAPTIVE ENGINE (CORE FEATURE) --- */
+    adaptive: {
+        track: (module) => {
+            // Increment usage count for the module
+            if(state.stats[module] !== undefined) {
+                state.stats[module]++;
+                app.data.save();
+                if(!state.user.layoutLocked && state.user.adaptiveEnabled) app.adaptive.run();
+            }
+        },
+        run: () => {
+            const hour = new Date().getHours();
+            let mode = "Wellness Mode";
+            let modeClass = "wellness";
+
+            // Determine Contextual Mode
+            if (hour >= 9 && hour < 17) {
+                mode = "Work Mode";
+                modeClass = "work";
+            } else if (hour >= 17 && hour < 20) {
+                mode = "Finance Mode"; // Evening budget check?
+            }
+
+            // Determine Widget Order based on Usage Stats
+            const modules = [
+                { id: 'widget-fin', score: state.stats.finance, type: 'finance' },
+                { id: 'widget-task', score: state.stats.tasks, type: 'tasks' },
+                { id: 'widget-focus', score: state.stats.focus, type: 'focus' },
+                { id: 'widget-water', score: state.health.water < 4 ? 100 : 0, type: 'health' } // Boost water if low
+            ];
+
+            // Sort logic: High score first
+            modules.sort((a, b) => b.score - a.score);
+
+            // Render Dashboard Grid
+            const grid = document.getElementById('dashboard-grid');
+            grid.innerHTML = ''; // Clear current
+
+            modules.forEach((mod, index) => {
+                const isPriority = index === 0 && state.user.adaptiveEnabled;
+                const html = app.adaptive.getWidgetHTML(mod.type, isPriority);
+                grid.innerHTML += html;
+            });
+
+            // Update UI Badges
+            document.getElementById('mode-badge').innerText = `🚀 ${mode}`;
+            document.getElementById('greeting').innerText = `Good ${hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening'}`;
+            document.getElementById('lock-layout-btn').innerText = state.user.layoutLocked ? '🔒' : '🔓';
+        },
+        getWidgetHTML: (type, priority) => {
+            const pClass = priority ? 'priority widget' : 'widget';
+            // Returns HTML string for widgets based on type
+            if(type === 'finance') {
+                const spent = state.finance.budget - state.finance.balance;
+                return `<div class="card glass ${pClass}" onclick="app.router.go('view-finance')">
+                    <div class="flex-between"><h3>💰 Finance</h3> ${priority?'<span class="badge">Top Used</span>':''}</div>
+                    <h2>$${state.finance.balance} <small class="text-muted">Balance</small></h2>
+                </div>`;
+            }
+            if(type === 'tasks') {
+                const pending = state.tasks.items.filter(t => !t.done).length;
+                return `<div class="card glass ${pClass}" onclick="app.router.go('view-tasks')">
+                    <div class="flex-between"><h3>✅ Tasks</h3> ${pending > 3 ? '<span class="badge">Busy</span>':''}</div>
+                    <p>${pending} tasks pending</p>
+                </div>`;
+            }
+            if(type === 'focus') {
+                return `<div class="card glass ${pClass}" onclick="app.router.go('view-focus')">
+                    <h3>⏱️ Focus</h3>
+                    <p>${state.health.focusTime} mins today</p>
+                </div>`;
+            }
+            if(type === 'health') {
+                return `<div class="card glass ${pClass}" onclick="app.router.go('view-focus')">
+                    <h3>🚰 Hydration</h3>
+                    <div class="progress-bg"><div class="progress-fill" style="width:${(state.health.water/8)*100}%"></div></div>
+                    <small>${state.health.water}/8 Glasses (Tap to add)</small>
+                </div>`;
+            }
+        },
+        toggleLayoutLock: () => {
+            state.user.layoutLocked = !state.user.layoutLocked;
+            app.data.save();
+            app.adaptive.run();
+        },
+        toggleConfig: (val) => {
+            state.user.adaptiveEnabled = val;
+            app.data.save();
+            app.adaptive.run();
+        },
+        reset: () => {
+            state.stats = { finance: 0, tasks: 0, focus: 0, vault: 0, lastActive: Date.now() };
+            app.data.save();
+            app.adaptive.run();
+        }
+    },
+
+    /* --- ROUTER & UI --- */
     router: {
         go: (viewId) => {
             document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             
-            // Nav Active State
+            // Track navigation for adaptive logic
+            if(viewId === 'view-finance') app.adaptive.track('finance');
+            if(viewId === 'view-tasks') app.adaptive.track('tasks');
+            if(viewId === 'view-focus') app.adaptive.track('focus');
+
+            // Update Nav
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            const index = ['view-dashboard','view-finance','view-productivity','view-vault','view-settings'].indexOf(viewId);
-            if(index > -1) document.querySelectorAll('.nav-item')[index].classList.add('active');
-            
-            // Title Update
-            const titles = {
-                'view-dashboard': 'Dashboard', 'view-finance': 'Money', 
-                'view-productivity': 'Focus', 'view-vault': 'Vault', 'view-settings': 'Settings'
-            };
-            document.getElementById('page-title').innerText = titles[viewId];
+            // Simple mapping for nav items active state
+            const map = {'view-dashboard':0, 'view-finance':1, 'view-tasks':2, 'view-focus':3, 'view-settings':4};
+            document.querySelectorAll('.nav-item')[map[viewId]].classList.add('active');
+            document.getElementById('page-title').innerText = viewId.replace('view-', '').toUpperCase();
         }
     },
     ui: {
@@ -101,182 +180,69 @@ const app = {
             app.ui.applyTheme();
             app.data.save();
         },
-        applyTheme: () => {
-            document.body.setAttribute('data-theme', state.user.theme);
-            document.getElementById('toggle-dark').checked = state.user.theme === 'dark';
-        },
-        toggleFab: () => {
-            document.getElementById('fab-menu').classList.toggle('hidden');
-        },
-        toggleSearch: () => {
-            const el = document.getElementById('search-overlay');
-            el.classList.toggle('hidden');
-            if(!el.classList.contains('hidden')) document.getElementById('global-search').focus();
-        },
-        closeModal: (id) => document.getElementById(id).classList.add('hidden'),
-        initListeners: () => {
-            // Keyboard Shortcuts
-            document.addEventListener('keydown', (e) => {
-                if((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); app.ui.toggleSearch(); }
-                if(e.key === 'Escape') {
-                    document.getElementById('search-overlay').classList.add('hidden');
-                    document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
-                }
-            });
-            // Date Display
-            document.getElementById('date-display').innerText = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-            
-            // Auto lock on visibility change
-            document.addEventListener('visibilitychange', () => {
-                if(document.hidden && state.user.pin) app.security.lock();
-            });
-        }
+        applyTheme: () => document.body.setAttribute('data-theme', state.user.theme),
+        toggleQuickMenu: () => document.getElementById('quick-menu').classList.toggle('hidden')
     },
 
-    /* --- SECURITY MODULE --- */
-    security: {
-        setPin: (val) => {
-            if(val.length === 4) { state.user.pin = val; app.data.save(); alert('PIN Set!'); }
-        },
-        checkLock: () => {
-            if(state.user.pin) document.getElementById('lock-screen').classList.remove('hidden');
-        },
-        unlock: () => {
-            const val = document.getElementById('unlock-pin').value;
-            if(val === state.user.pin) {
-                document.getElementById('lock-screen').classList.add('hidden');
-                document.getElementById('unlock-pin').value = '';
-            } else {
-                document.getElementById('lock-msg').innerText = 'Incorrect PIN';
-            }
-        },
-        lock: () => document.getElementById('lock-screen').classList.remove('hidden')
-    },
-
-    /* --- FINANCE MODULE --- */
+    /* --- MODULES --- */
     finance: {
-        openModal: (type) => {
-            document.getElementById('transaction-modal').classList.remove('hidden');
-            document.getElementById('trans-modal-title').innerText = type === 'income' ? 'Add Income' : 'Add Expense';
-            document.getElementById('transaction-modal').dataset.type = type;
-        },
-        saveTransaction: () => {
-            const amt = parseFloat(document.getElementById('t-amount').value);
-            const desc = document.getElementById('t-desc').value;
-            const cat = document.getElementById('t-cat').value;
-            const type = document.getElementById('transaction-modal').dataset.type;
-
-            if(!amt || !desc) return;
-
-            state.finance.transactions.unshift({ id: Date.now(), type, amt, desc, cat, date: new Date().toLocaleDateString() });
+        add: () => {
+            const amt = parseFloat(document.getElementById('fin-amt').value);
+            const cat = document.getElementById('fin-cat').value;
+            if(!amt) return;
+            state.finance.transactions.unshift({id: Date.now(), amt, cat, date: new Date().toLocaleDateString()});
+            state.finance.balance -= amt; // Simple logic: starts with budget, sub expenses
+            document.getElementById('fin-amt').value = '';
             app.data.save();
-            app.finance.render();
-            app.ui.closeModal('transaction-modal');
-            
-            // Clear inputs
-            document.getElementById('t-amount').value = '';
-            document.getElementById('t-desc').value = '';
+            app.renderAll();
         },
-        addAsset: () => {
-            const name = document.getElementById('inv-name').value;
-            const invested = parseFloat(document.getElementById('inv-amt').value);
-            const current = parseFloat(document.getElementById('inv-curr').value);
-            if(name && invested) {
-                state.finance.assets.push({name, invested, current});
-                app.data.save();
-                app.finance.render();
-                // Clear
-                document.getElementById('inv-name').value = '';
-                document.getElementById('inv-amt').value = '';
-                document.getElementById('inv-curr').value = '';
-            }
-        },
-        setBudget: (val) => { state.finance.budget = parseFloat(val); app.data.save(); app.finance.render(); },
         render: () => {
-            const income = state.finance.transactions.filter(t => t.type === 'income').reduce((a, b) => a + b.amt, 0);
-            const expense = state.finance.transactions.filter(t => t.type === 'expense').reduce((a, b) => a + b.amt, 0);
-            const balance = income - expense;
-            
-            // Dashboard
-            document.getElementById('dash-balance').innerText = `$${balance.toFixed(2)}`;
-            
-            // Finance View
-            document.getElementById('fin-total-expense').innerText = `$${expense.toFixed(2)}`;
-            const remain = state.finance.budget - expense;
-            document.getElementById('fin-budget-remain').innerText = `$${remain.toFixed(2)} Remaining`;
-            
-            const pct = Math.min((expense / state.finance.budget) * 100, 100);
-            document.getElementById('fin-budget-bar').style.width = `${pct}%`;
-            document.getElementById('budget-alert').classList.toggle('hidden', pct < 80);
-
-            // Transactions List
-            const list = document.getElementById('trans-list');
-            list.innerHTML = '';
-            state.finance.transactions.slice(0, 10).forEach(t => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-                    <div><b>${t.desc}</b> <br><small class="text-muted">${t.cat}</small></div>
-                    <span class="${t.type === 'income' ? 'text-success' : 'text-danger'}">
-                        ${t.type === 'income' ? '+' : '-'}$${t.amt}
-                    </span>`;
-                list.appendChild(li);
+            const el = document.getElementById('fin-list');
+            el.innerHTML = '';
+            state.finance.transactions.slice(0, 5).forEach(t => {
+                el.innerHTML += `<li><span>${t.cat}</span> <span style="color:var(--danger)">-$${t.amt}</span></li>`;
             });
-
-            // Assets List
-            const aList = document.getElementById('asset-list');
-            aList.innerHTML = '';
-            state.finance.assets.forEach(a => {
-                const profit = a.current - a.invested;
-                const li = document.createElement('li');
-                li.innerHTML = `<span>${a.name}</span> <span class="${profit>=0?'text-success':'text-danger'}">${profit>=0?'+':''}${profit}</span>`;
-                aList.appendChild(li);
-            });
-
-            // Health Score (Simple Algo: Savings Rate + Budget Adherence)
-            const savingsRate = income > 0 ? ((income - expense) / income) * 50 : 0;
-            const budgetScore = pct < 100 ? 50 : 0;
-            document.getElementById('score-finance').innerText = `${Math.round(savingsRate + budgetScore)}/100`;
+            document.getElementById('fin-balance').innerText = `$${state.finance.balance.toFixed(2)}`;
+            
+            // Budget Alert
+            const spent = state.finance.budget - state.finance.balance;
+            const pct = (spent / state.finance.budget) * 100;
+            document.getElementById('fin-progress').style.width = `${pct}%`;
+            document.getElementById('fin-spent').innerText = `$${spent.toFixed(2)}`;
+            if(pct > 80) document.getElementById('budget-alert').classList.remove('hidden');
         }
     },
-
-    /* --- PRODUCTIVITY MODULE --- */
-    productivity: {
-        render: () => {
-            app.goals.render();
-            app.timer.render();
-            app.planner.render();
-            
-            // Score
-            const doneGoals = state.productivity.goals.filter(g => g.done).length;
-            const totalGoals = state.productivity.goals.length;
-            const score = totalGoals === 0 ? 0 : Math.round((doneGoals / totalGoals) * 100);
-            document.getElementById('score-prod').innerText = `${score}%`;
-        }
-    },
-    goals: {
-        addPrompt: () => {
+    tasks: {
+        add: () => {
+            const txt = document.getElementById('task-input').value;
+            if(!txt) return;
+            state.tasks.items.push({id: Date.now(), txt, done: false});
+            document.getElementById('task-input').value = '';
+            app.data.save();
+            app.renderAll();
+        },
+        addGoal: () => {
             const txt = prompt("Goal Name:");
-            if(txt) {
-                state.productivity.goals.push({ id: Date.now(), text: txt, done: false });
-                app.data.save();
-                app.productivity.render();
-            }
+            if(txt) { state.tasks.goals.push({txt}); app.data.save(); app.renderAll(); }
         },
         toggle: (id) => {
-            const g = state.productivity.goals.find(x => x.id === id);
-            if(g) { g.done = !g.done; app.data.save(); app.productivity.render(); }
+            const t = state.tasks.items.find(x => x.id === id);
+            t.done = !t.done;
+            app.data.save();
+            app.renderAll();
         },
         render: () => {
-            const list = document.getElementById('goals-list');
+            const list = document.getElementById('task-list');
             list.innerHTML = '';
-            state.productivity.goals.forEach(g => {
-                const li = document.createElement('li');
-                li.innerHTML = `<span style="${g.done?'text-decoration:line-through;opacity:0.6':''}">${g.text}</span> <input type="checkbox" ${g.done?'checked':''} onchange="app.goals.toggle(${g.id})">`;
-                list.appendChild(li);
+            state.tasks.items.forEach(t => {
+                list.innerHTML += `<li onclick="app.tasks.toggle(${t.id})">
+                    <span style="${t.done?'text-decoration:line-through;opacity:0.5':''}">${t.txt}</span>
+                    <span>${t.done?'✅':'⭕'}</span>
+                </li>`;
             });
-            // Dashboard Preview
-            const top = state.productivity.goals.find(g => !g.done);
-            document.getElementById('dash-goal-preview').innerHTML = top ? `<p>🎯 ${top.text}</p>` : `<p class="text-muted">All goals done!</p>`;
+            const gList = document.getElementById('goal-list');
+            gList.innerHTML = '';
+            state.tasks.goals.forEach(g => gList.innerHTML += `<li>🎯 ${g.txt}</li>`);
         }
     },
     timer: {
@@ -287,13 +253,16 @@ const app = {
             } else {
                 timerInterval = setInterval(() => {
                     timerSeconds--;
-                    app.timer.render();
+                    const m = Math.floor(timerSeconds / 60).toString().padStart(2,0);
+                    const s = (timerSeconds % 60).toString().padStart(2,0);
+                    document.getElementById('timer-display').innerText = `${m}:${s}`;
                     if(timerSeconds <= 0) {
                         clearInterval(timerInterval);
-                        alert("Focus Session Complete!");
-                        state.productivity.focusTime += 25;
+                        alert("Focus Complete!");
+                        state.health.focusTime += 25;
+                        timerSeconds = 1500;
                         app.data.save();
-                        app.timer.reset();
+                        app.adaptive.run(); // Update dashboard stats
                     }
                 }, 1000);
             }
@@ -302,170 +271,73 @@ const app = {
             clearInterval(timerInterval);
             timerInterval = null;
             timerSeconds = 1500;
-            app.timer.render();
-        },
-        render: () => {
-            const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
-            const s = (timerSeconds % 60).toString().padStart(2, '0');
-            document.getElementById('timer-display').innerText = `${m}:${s}`;
-            document.getElementById('dash-focus').innerText = `${state.productivity.focusTime}m`;
+            document.getElementById('timer-display').innerText = "25:00";
         }
     },
-    planner: {
-        render: () => {
-            const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-            const container = document.getElementById('planner-days');
-            container.innerHTML = '';
-            const todayIdx = new Date().getDay();
-            
-            days.forEach((d, i) => {
-                const div = document.createElement('div');
-                div.className = `day-pill ${i === todayIdx ? 'active' : ''}`;
-                div.innerText = d;
-                div.onclick = () => app.planner.selectDay(d);
-                container.appendChild(div);
-            });
-            // Default view logic could go here
-        },
-        selectDay: (d) => {
-            const cont = document.getElementById('day-tasks');
-            const val = state.productivity.weekly[d] || '';
-            cont.innerHTML = `<textarea placeholder="Plan for ${d}..." class="full-width" rows="3" onchange="app.planner.save('${d}', this.value)">${val}</textarea>`;
-        },
-        save: (day, val) => {
-            state.productivity.weekly[day] = val;
-            app.data.save();
-        }
-    },
-
-    /* --- HEALTH MODULE --- */
     health: {
         addWater: () => {
             state.health.water++;
             app.data.save();
-            app.health.render();
-        },
-        render: () => {
+            app.adaptive.run(); // Update widget immediately
             document.getElementById('water-count').innerText = state.health.water;
-            document.getElementById('water-goal-disp').innerText = state.health.waterGoal;
-            const pct = Math.min((state.health.water / state.health.waterGoal)*100, 100);
-            document.getElementById('water-bar').style.width = `${pct}%`;
         }
     },
-
-    /* --- VAULT (IndexedDB & Notes) --- */
     vault: {
-        switchTab: (tab) => {
-            document.querySelectorAll('.vault-tab').forEach(e => e.classList.add('hidden'));
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
-            event.target.classList.add('active');
-        },
-        unlockSecure: () => {
-            if(document.getElementById('secure-pin-input').value === state.user.pin) {
-                document.getElementById('secure-lock').classList.add('hidden');
-                document.getElementById('secure-content').classList.remove('hidden');
-                document.getElementById('secure-pad').value = state.secureNote;
-            } else alert('Wrong PIN');
-        },
-        saveSecure: (val) => { state.secureNote = val; app.data.save(); }
-    },
-    notes: {
-        create: () => {
-            const title = prompt("Note Title:");
-            if(title) {
-                state.notes.unshift({id: Date.now(), title, body: ''});
-                app.data.save();
-                app.notes.render();
-            }
-        },
-        update: (id, text) => {
-            const n = state.notes.find(x => x.id === id);
-            if(n) { n.body = text; app.data.save(); }
-        },
-        render: () => {
-            const grid = document.getElementById('notes-grid');
-            const filter = document.getElementById('note-search').value.toLowerCase();
-            grid.innerHTML = '';
-            
-            state.notes.filter(n => n.title.toLowerCase().includes(filter)).forEach(n => {
-                const div = document.createElement('div');
-                div.className = 'note-card';
-                div.innerHTML = `<b>${n.title}</b><textarea style="width:100%;height:80px;background:transparent;border:none;resize:none" oninput="app.notes.update(${n.id}, this.value)">${n.body}</textarea>`;
-                grid.appendChild(div);
-            });
-        }
-    },
-    docs: {
         initDB: () => {
-            return new Promise((resolve) => {
+            return new Promise(resolve => {
                 const req = indexedDB.open(DB_NAME, DB_VER);
-                req.onupgradeneeded = (e) => e.target.result.createObjectStore('files', {keyPath: 'id', autoIncrement:true});
-                req.onsuccess = (e) => { db = e.target.result; app.docs.render(); resolve(); };
+                req.onupgradeneeded = e => e.target.result.createObjectStore('files', {keyPath: 'id', autoIncrement:true});
+                req.onsuccess = e => { db = e.target.result; app.vault.render(); resolve(); }
             });
         },
-        handleUpload: (input) => {
+        upload: (input) => {
             const file = input.files[0];
-            if(!file) return;
-            const tx = db.transaction(['files'], 'readwrite');
-            tx.objectStore('files').add({ name: file.name, type: file.type, data: file, date: new Date().toLocaleDateString() });
-            tx.oncomplete = () => { alert('Saved to Vault'); app.docs.render(); };
+            const reader = new FileReader();
+            reader.onload = () => {
+                const tx = db.transaction(['files'], 'readwrite');
+                tx.objectStore('files').add({name: file.name, data: reader.result, date: new Date().toLocaleDateString()});
+                tx.oncomplete = () => app.vault.render();
+            };
+            reader.readAsDataURL(file);
         },
         render: () => {
             if(!db) return;
-            const list = document.getElementById('docs-list');
+            const list = document.getElementById('file-list');
             list.innerHTML = '';
-            let size = 0;
-            const tx = db.transaction(['files'], 'readonly');
-            tx.objectStore('files').openCursor().onsuccess = (e) => {
+            db.transaction('files').readonly.objectStore('files').openCursor().onsuccess = e => {
                 const cursor = e.target.result;
                 if(cursor) {
-                    size += cursor.value.data.size;
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span>📄 ${cursor.value.name}</span> <button class="btn-sm btn-danger" onclick="app.docs.del(${cursor.key})">×</button>`;
-                    list.appendChild(li);
+                    list.innerHTML += `<li>📄 ${cursor.value.name} <button class="btn-danger btn-sm" onclick="app.vault.del(${cursor.key})">x</button></li>`;
                     cursor.continue();
-                } else {
-                    document.getElementById('storage-usage').innerText = `Storage: ${(size/1024/1024).toFixed(2)} MB`;
                 }
-            };
+            }
         },
         del: (key) => {
-            const tx = db.transaction(['files'], 'readwrite');
-            tx.objectStore('files').delete(key);
-            tx.oncomplete = app.docs.render;
+            db.transaction(['files'], 'readwrite').objectStore('files').delete(key).onsuccess = () => app.vault.render();
         }
     },
-
-    /* --- GLOBAL SEARCH --- */
-    search: {
-        run: (q) => {
-            const list = document.getElementById('search-results');
-            list.innerHTML = '';
-            if(q.length < 2) return;
-            q = q.toLowerCase();
-
-            // Search Notes
-            state.notes.filter(n => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q)).forEach(n => {
-                list.innerHTML += `<li onclick="app.ui.toggleSearch();app.router.go('view-vault');app.vault.switchTab('notes')">📝 Note: ${n.title}</li>`;
-            });
-
-            // Search Expenses
-            state.finance.transactions.filter(t => t.desc.toLowerCase().includes(q)).forEach(t => {
-                list.innerHTML += `<li>💰 ${t.desc} ($${t.amt})</li>`;
-            });
+    security: {
+        setPin: () => {
+            const p = document.getElementById('set-pin').value;
+            if(p.length === 4) { state.user.pin = p; app.data.save(); alert('PIN Set'); }
+        },
+        check: () => {
+            if(state.user.pin) document.getElementById('lock-screen').classList.remove('hidden');
+        },
+        unlock: () => {
+            if(document.getElementById('unlock-pin').value === state.user.pin) {
+                document.getElementById('lock-screen').classList.add('hidden');
+            } else alert('Wrong PIN');
         }
     },
 
     renderAll: () => {
         app.finance.render();
-        app.productivity.render();
-        app.health.render();
-        app.notes.render();
-        app.ui.applyTheme();
-        document.getElementById('set-budget').value = state.finance.budget;
+        app.tasks.render();
+        app.vault.render();
+        document.getElementById('water-count').innerText = state.health.water;
     }
 };
 
-/* --- START APP --- */
+// Start
 document.addEventListener('DOMContentLoaded', app.init);
