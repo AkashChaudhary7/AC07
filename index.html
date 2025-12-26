@@ -3,193 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>LifeOS - Personal Manager</title>
+    <meta name="theme-color" content="#4e54c8">
+    <title>LifeOS Pro</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 <body>
 
-    <div class="app-container">
+    <div id="app-lock-screen" class="lock-screen hidden">
+        <div class="glass-panel text-center">
+            <h2>🔒 LifeOS Locked</h2>
+            <p>Enter PIN to access</p>
+            <input type="password" id="unlock-pin" maxlength="4" placeholder="Enter PIN">
+            <button class="btn-primary" onclick="unlockApp()">Unlock</button>
+            <p id="lock-msg" class="error-text"></p>
+        </div>
+    </div>
+
+    <div class="app-container" id="main-app">
         
-        <header class="app-header">
-            <h1 id="page-title">Dashboard</h1>
-            <button id="theme-toggle" class="icon-btn">🌙</button>
+        <header class="top-bar glass">
+            <h2 id="page-title">Dashboard</h2>
+            <div class="actions">
+                <button class="icon-btn" onclick="toggleTheme()">🌓</button>
+            </div>
         </header>
 
-        <main id="main-content">
-            
-            <section id="dashboard" class="tab-content active">
-                <div class="card glass summary-card">
-                    <h3>Total Balance</h3>
-                    <h1 class="highlight-text" id="dash-balance">0.00</h1>
-                    <div class="row">
-                        <div class="col">
-                            <span class="label">Income</span>
-                            <span class="value success" id="dash-income">0.00</span>
-                        </div>
-                        <div class="col">
-                            <span class="label">Expense</span>
-                            <span class="value danger" id="dash-expense">0.00</span>
-                        </div>
+        <main class="content-area">
+
+            <section id="dashboard" class="view active-view">
+                <div class="welcome-banner glass">
+                    <h3>Hello, User 👋</h3>
+                    <p id="date-display">Fetching date...</p>
+                </div>
+
+                <div class="grid-2">
+                    <div class="card glass">
+                        <span class="label">Financial Health</span>
+                        <h2 id="dash-health-score">0/100</h2>
+                    </div>
+                    <div class="card glass">
+                        <span class="label">Balance</span>
+                        <h3 id="dash-balance">$0.00</h3>
                     </div>
                 </div>
 
-                <div class="card glass">
-                    <h3>Today's Progress</h3>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="dash-progress-bar"></div>
+                <div class="card glass flex-row-center">
+                    <div>
+                        <h4>Hydration 💧</h4>
+                        <p><span id="water-count">0</span> / <span id="water-goal-disp">8</span> glasses</p>
                     </div>
-                    <p class="small-text"><span id="dash-progress-text">0%</span> Completed</p>
+                    <button class="btn-circle" onclick="addWater()">+</button>
                 </div>
 
                 <div class="card glass">
-                    <h3>Quick Actions</h3>
-                    <div class="action-grid">
-                        <button class="action-btn" onclick="navTo('tracker')">💰 Add Expense</button>
-                        <button class="action-btn" onclick="navTo('notes')">📝 New Note</button>
-                        <button class="action-btn" onclick="navTo('tasks')">✅ Add Task</button>
-                    </div>
+                    <h4>Today's Focus</h4>
+                    <p id="dash-focus-time">0m completed</p>
                 </div>
             </section>
 
-            <section id="tracker" class="tab-content">
+            <section id="finance" class="view">
+                <div class="card glass highlight-card">
+                    <div class="flex-between">
+                        <div>
+                            <span class="label">Income</span>
+                            <h4 class="success" id="fin-income">$0</h4>
+                        </div>
+                        <div>
+                            <span class="label">Expense</span>
+                            <h4 class="danger" id="fin-expense">$0</h4>
+                        </div>
+                    </div>
+                    <div class="progress-wrapper">
+                        <div class="progress-bar" id="budget-bar"></div>
+                    </div>
+                    <small>Budget Used: <span id="budget-pct">0%</span></small>
+                </div>
+
                 <div class="card glass">
                     <h3>Add Transaction</h3>
-                    <div class="form-group">
+                    <div class="form-grid">
                         <select id="trans-type">
                             <option value="expense">Expense</option>
                             <option value="income">Income</option>
                         </select>
-                        <input type="number" id="trans-amount" placeholder="Amount">
-                        <input type="text" id="trans-desc" placeholder="Description / Source">
-                        <select id="trans-category">
+                        <input type="number" id="trans-amt" placeholder="Amount">
+                        <select id="trans-cat">
                             <option value="Food">Food</option>
                             <option value="Travel">Travel</option>
                             <option value="Bills">Bills</option>
                             <option value="Shopping">Shopping</option>
                             <option value="Salary">Salary</option>
-                            <option value="Invest">Investment</option>
-                            <option value="Other">Other</option>
                         </select>
                         <button class="btn-primary" onclick="addTransaction()">Add</button>
                     </div>
                 </div>
 
                 <div class="card glass">
-                    <h3>Budget & Savings</h3>
-                    <div class="row space-between">
-                        <span>Monthly Budget:</span>
-                        <input type="number" id="monthly-budget" class="inline-input" placeholder="Set Budget" onchange="updateBudget()">
-                    </div>
-                    <p class="small-text" id="budget-status">Remaining:  0.00</p>
-                </div>
-
-                <div class="card glass">
-                    <h3>Portfolio (Stocks/MF)</h3>
-                    <div class="form-group">
+                    <h3>📈 Portfolio</h3>
+                    <div class="form-grid">
                         <input type="text" id="asset-name" placeholder="Asset Name">
-                        <div class="row">
-                            <input type="number" id="asset-invested" placeholder="Invested">
-                            <input type="number" id="asset-current" placeholder="Current Val">
-                        </div>
-                        <button class="btn-secondary" onclick="addAsset()">Add Asset</button>
+                        <input type="number" id="asset-buy" placeholder="Invested">
+                        <input type="number" id="asset-curr" placeholder="Current">
+                        <button class="btn-secondary" onclick="addAsset()">Track</button>
                     </div>
                     <ul id="asset-list" class="list-group"></ul>
                 </div>
-
-                <div class="card glass">
-                    <h3>Recent Transactions</h3>
-                    <ul id="transaction-list" class="list-group"></ul>
-                </div>
             </section>
 
-            <section id="notes" class="tab-content">
-                <div class="card glass" id="note-editor" style="display:none;">
-                    <div class="row space-between">
-                        <input type="text" id="note-title" placeholder="Note Title" class="invisible-input">
-                        <button class="icon-btn" onclick="closeNote()">✕</button>
-                    </div>
-                    <textarea id="note-body" placeholder="Write something..." class="invisible-textarea"></textarea>
-                    <button class="btn-primary full-width" onclick="saveNote()">Save Note</button>
-                </div>
-
-                <button class="btn-primary floating-action" onclick="openNote()">+ New Note</button>
-
-                <div id="notes-list-container">
-                    </div>
-            </section>
-
-            <section id="tasks" class="tab-content">
+            <section id="productivity" class="view">
                 <div class="card glass text-center">
-                    <h3>Daily Streak</h3>
-                    <h1 class="highlight-text" id="streak-count">🔥 0 Days</h1>
-                </div>
-
-                <div class="card glass">
-                    <div class="row">
-                        <input type="text" id="new-task-input" placeholder="Add a new task...">
-                        <button class="btn-icon-only" onclick="addTask()">＋</button>
+                    <h3>⏱️ Focus Timer</h3>
+                    <h1 id="timer-display">25:00</h1>
+                    <div class="btn-group">
+                        <button class="btn-secondary" onclick="startTimer()">Start</button>
+                        <button class="btn-secondary" onclick="pauseTimer()">Pause</button>
+                        <button class="btn-danger" onclick="resetTimer()">Reset</button>
                     </div>
                 </div>
 
                 <div class="card glass">
-                    <h3>Today's Tasks</h3>
-                    <ul id="task-list" class="task-list"></ul>
+                    <h3>🗓️ Weekly Plan</h3>
+                    <div id="planner-container">
+                        </div>
                 </div>
-                
-                <button class="btn-secondary full-width" onclick="resetTasks()">Reset Daily Tasks</button>
+
+                <div class="card glass">
+                    <h3>🎯 Active Goals</h3>
+                    <div class="row">
+                        <input type="text" id="goal-input" placeholder="New Goal">
+                        <button class="btn-primary" onclick="addGoal()">+</button>
+                    </div>
+                    <ul id="goal-list" class="list-group"></ul>
+                </div>
             </section>
 
-            <section id="settings" class="tab-content">
+            <section id="vault" class="view">
+                <div class="tab-pill-container glass">
+                    <button class="tab-pill active" onclick="switchVaultTab('notes')">Notes</button>
+                    <button class="tab-pill" onclick="switchVaultTab('secure')">Secure</button>
+                    <button class="tab-pill" onclick="switchVaultTab('files')">Files</button>
+                </div>
+
+                <div id="vault-notes" class="vault-tab active">
+                    <button class="btn-primary full-width" onclick="newNote()">+ New Note</button>
+                    <div id="notes-list" class="grid-2 mt-10"></div>
+                </div>
+
+                <div id="vault-secure" class="vault-tab hidden">
+                    <div id="secure-lock-ui" class="text-center">
+                        <p>🔒 Enter App PIN to view</p>
+                        <input type="password" id="secure-access-pin" placeholder="PIN">
+                        <button class="btn-secondary" onclick="accessSecureNotes()">Unlock</button>
+                    </div>
+                    <div id="secure-content" class="hidden">
+                        <textarea id="secure-notepad" placeholder="Type secret notes here... (Auto-saved)"></textarea>
+                    </div>
+                </div>
+
+                <div id="vault-files" class="vault-tab hidden">
+                    <div class="card glass dashed-border text-center">
+                        <p>Upload Image/PDF</p>
+                        <input type="file" id="file-upload" onchange="handleFileUpload(this)">
+                    </div>
+                    <ul id="file-list" class="list-group"></ul>
+                </div>
+            </section>
+
+            <section id="settings" class="view">
                 <div class="card glass">
-                    <h3>App Settings</h3>
-                    <div class="setting-item">
-                        <span>Dark Mode</span>
-                        <label class="switch">
-                            <input type="checkbox" id="setting-theme-toggle">
-                            <span class="slider round"></span>
-                        </label>
+                    <h3>⚙️ App Preferences</h3>
+                    <div class="setting-row">
+                        <span>App PIN</span>
+                        <input type="password" id="set-pin" placeholder="Set 4-digit PIN" maxlength="4">
+                        <button class="btn-small" onclick="savePin()">Save</button>
+                    </div>
+                    <div class="setting-row">
+                        <span>Daily Water Goal</span>
+                        <input type="number" id="set-water" value="8" style="width:60px">
                     </div>
                 </div>
 
                 <div class="card glass">
-                    <h3>Data Management</h3>
-                    <button class="btn-secondary full-width" onclick="exportData()">📥 Export Data (JSON)</button>
-                    <br><br>
-                    <button class="btn-danger full-width" onclick="resetAllData()">⚠️ Reset All Data</button>
-                </div>
-                
-                <div class="footer-info">
-                    <p>LifeOS v1.0 • Offline Capable</p>
+                    <h3>💾 Data Management</h3>
+                    <button class="btn-secondary full-width mb-10" onclick="exportData()">📤 Export Data (JSON)</button>
+                    <div class="flex-row-center">
+                        <input type="file" id="import-file" style="display:none" onchange="importData(this)">
+                        <button class="btn-secondary full-width" onclick="document.getElementById('import-file').click()">📥 Import Data</button>
+                    </div>
+                    <button class="btn-danger full-width mt-10" onclick="resetApp()">⚠️ Reset App</button>
                 </div>
             </section>
 
         </main>
 
         <nav class="bottom-nav glass">
-            <button class="nav-item active" onclick="switchTab('dashboard')">
-                <span class="icon">🏠</span>
-                <span class="label">Home</span>
-            </button>
-            <button class="nav-item" onclick="switchTab('tracker')">
-                <span class="icon">💰</span>
-                <span class="label">Money</span>
-            </button>
-            <button class="nav-item" onclick="switchTab('notes')">
-                <span class="icon">📝</span>
-                <span class="label">Notes</span>
-            </button>
-            <button class="nav-item" onclick="switchTab('tasks')">
-                <span class="icon">✅</span>
-                <span class="label">Tasks</span>
-            </button>
-            <button class="nav-item" onclick="switchTab('settings')">
-                <span class="icon">⚙️</span>
-                <span class="label">Settings</span>
-            </button>
+            <button class="nav-item active" onclick="navTo('dashboard')">🏠<br><span>Home</span></button>
+            <button class="nav-item" onclick="navTo('finance')">💰<br><span>Money</span></button>
+            <button class="nav-item" onclick="navTo('productivity')">🚀<br><span>Focus</span></button>
+            <button class="nav-item" onclick="navTo('vault')">📁<br><span>Vault</span></button>
+            <button class="nav-item" onclick="navTo('settings')">⚙️<br><span>Settings</span></button>
         </nav>
 
+        <div id="note-modal" class="modal hidden">
+            <div class="modal-content glass">
+                <input type="text" id="modal-note-title" placeholder="Title">
+                <textarea id="modal-note-body" placeholder="Write markdown..."></textarea>
+                <div class="flex-end">
+                    <button class="btn-danger" onclick="closeModal()">Cancel</button>
+                    <button class="btn-primary" onclick="saveModalNote()">Save</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js');
+        }
+    </script>
 </body>
 </html>
